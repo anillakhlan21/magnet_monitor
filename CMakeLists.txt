@@ -1,33 +1,40 @@
 cmake_minimum_required(VERSION 3.16.0)
 
-project(Embridge_Modbus_MQTT_SQLite)
+project(magnetic_monitor)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-set(tools /home/al034/Desktop/Workspace/SDKs/RUT2XX_R_GPL_00.01.14.6/staging_dir/toolchain-mips_34kc_gcc-4.8-linaro_uClibc-0.9.33.2)
-set(CMAKE_C_COMPILER ${tools}/bin/mips-openwrt-linux-gcc)
-set(CMAKE_CXX_COMPILER ${tools}/bin/mips-openwrt-linux-g++)
+set(TOOLCHAIN_DIR /home/al034/Desktop/Workspace/SDKs/openwrt-sdk-ramips-mt76x8_gcc-7.5.0_musl.Linux-x86_64/staging_dir)
+# allow overriding the toolchain path via -DTOOLCHAIN_DIR=...
+if(DEFINED TOOLCHAIN_DIR)
+  set(tools ${TOOLCHAIN_DIR}/toolchain-mipsel_24kc_gcc-7.5.0_musl)
+endif()
+set(CMAKE_C_COMPILER ${tools}/bin/mipsel-openwrt-linux-gcc)
+set(CMAKE_CXX_COMPILER ${tools}/bin/mipsel-openwrt-linux-g++)
 
-set(Libs libjsoncpp.so.1.9.4 libmosquitto.so libsqlite3.so libmodbus.so libssl.so libcrypto.so)
+# keep pthread flags
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
-# link_directories(usr/lib)
-# link_directories(/usr/lib/x86_64-linux-gnu)
+# Link against jsoncpp, libmosquitto (C library) and libcurl (for FTP)
+set(Libs jsoncpp mosquitto curl pthread)
 
-link_directories(/home/al034/Desktop/Workspace/SDKs/RUT2XX_R_GPL_00.01.14.6/staging_dir/target-mips_34kc_uClibc-0.9.33.2/usr/lib)
-link_directories(/home/al034/Desktop/Workspace/SDKs/RUT2XX_R_GPL_00.01.14.6/rutos-ath79-rut2-gpl/staging_dir/target-mips_34kc_uClibc-0.9.33.2/root-ar71xx/usr/lib)
+# link directories from SDK
+link_directories(${TOOLCHAIN_DIR}/target-mipsel_24kc_musl/usr/lib)
+link_directories(${TOOLCHAIN_DIR}/target-mipsel_24kc_musl/root-ramips/usr/lib)
 
 add_executable(
     ${PROJECT_NAME}
-    cpp/main.cpp
-    cpp/settings.cpp
-    cpp/mqtt.cpp
-    cpp/modbus.cpp
-    cpp/db.cpp
-    )
+    src/main.cpp
+    src/config.cpp
+    src/ftp_downloader.cpp
+  src/mqtt_publisher.cpp
+    src/parser.cpp
+    src/utils.cpp
+)
 
+# include paths (add SDK includes)
 include_directories(/usr/include)
 include_directories(header)
 include_directories(lib/json)
-include_directories(/home/al034/Desktop/Workspace/SDKs/RUT2XX_R_GPL_00.01.14.6/rutos-ath79-rut2-gpl/staging_dir/target-mips_34kc_uClibc-0.9.33.2/usr/include)
+include_directories(${TOOLCHAIN_DIR}/target-mipsel_24kc_musl/usr/include)
 
 target_link_libraries(${PROJECT_NAME} ${Libs})
 
