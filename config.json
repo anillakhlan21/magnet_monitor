@@ -1,0 +1,15 @@
+{
+  "FTP_HOST": "10.1.10.132",
+  "FTP_USER": "MMService",
+  "FTP_PASS": "MagnetMonitor",
+  "LOCAL_FILE": "/tmp/latest_data.dat",
+
+  "MQTT_SERVER": "tcp://broker.emqx.io:1883",
+  "MQTT_CLIENT_ID": "OpenWrt_MagnetMonitor",
+  "MQTT_TOPIC": "magnet_monitor/data",
+  "MQTT_USER": "emqx",
+  "MQTT_PASS": "public",
+
+  "POLL_INTERVAL": 300,
+  "RETRY_INTERVAL": 120
+}

@@ -1,0 +1,19 @@
+services:
+  cross-builder:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile
+    image: magnet-monitor-cross:latest
+    container_name: magnet_monitor_builder
+    volumes:
+      - ./:/work:cached
+      # Mount your extracted OpenWrt toolchain or SDK here. Default is under $HOME/openwrt-toolchains
+      - ${OPENWRT_TOOLCHAIN_HOST_PATH:-${HOME}/openwrt-toolchains}:/opt/openwrt-toolchain:ro
+    environment:
+      # Provide sensible defaults so you don't need to export UID/GID every session
+      - HOST_UID=${UID:-1000}
+      - HOST_GID=${GID:-1000}
+    working_dir: /work
+    tty: true
+    stdin_open: true
+    command: ["bash"]

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.invendis.magnetmonitor</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/anillakhlan/Documents/Personal/Part time work/Birendar Invendis/build/magnet_monitor</string>
+      <!-- Use --once for one-shot runs; omit to run continuously -->
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/anillakhlan/Documents/Personal/Part time work/Birendar Invendis</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/anillakhlan/Documents/Personal/Part time work/Birendar Invendis/magnet_monitor.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/anillakhlan/Documents/Personal/Part time work/Birendar Invendis/magnet_monitor.log</string>
+  </dict>
+</plist>
