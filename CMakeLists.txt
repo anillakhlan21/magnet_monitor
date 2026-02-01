@@ -14,8 +14,8 @@ set(CMAKE_CXX_COMPILER ${tools}/bin/mipsel-openwrt-linux-g++)
 # keep pthread flags
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
-# Link against jsoncpp and libmosquitto (C library). libcurl will be located below.
-set(Libs jsoncpp mosquitto pthread curl)
+# Link against jsoncpp, libmosquitto (C library) and libcurl (for FTP)
+set(Libs jsoncpp mosquitto curl pthread)
 
 # link directories from SDK
 link_directories(${TOOLCHAIN_DIR}/target-mipsel_24kc_musl/usr/lib)
@@ -36,8 +36,5 @@ include_directories(/usr/include)
 include_directories(header)
 include_directories(lib/json)
 include_directories(${TOOLCHAIN_DIR}/target-mipsel_24kc_musl/usr/include)
-
-include_directories(${CMAKE_SOURCE_DIR}/include)
-
 
 target_link_libraries(${PROJECT_NAME} ${Libs})
