@@ -33,7 +33,9 @@ bool download_ftp(const Config& cfg, const std::string& remote_filename, std::st
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
     curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
-
+    curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1L);
+    curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1L);
+    
     CURLcode res = curl_easy_perform(curl);
     fclose(fp);
 
