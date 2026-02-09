@@ -17,6 +17,10 @@ struct Config {
     int poll_interval{300};
     int retry_interval{120};
 
+    std::string log_file;
+    std::string app_username;
+    std::string app_password;
+
     // Load configuration from a simple JSON file (flat key/value pairs only)
     bool load_from_file(const std::string& path);
 };
