@@ -59,6 +59,16 @@ bool MQTTPublisher::connect(const Config& cfg) {
             return false;
         }
 
+        // Start the network loop in a background thread
+        int loop_rc = mosquitto_loop_start(mosq.get());
+        if (loop_rc != MOSQ_ERR_SUCCESS) {
+            std::string err_msg = "MQTT loop_start failed: " + std::string(mosquitto_strerror(loop_rc));
+            std::cerr << err_msg << std::endl;
+            write_log(cfg.log_file, err_msg);
+            mosq.reset();
+            return false;
+        }
+
         connected = true;
         write_log(cfg.log_file, "MQTT: Connected to " + host + ":" + std::to_string(port));
     } catch (const std::exception& e) {
@@ -95,7 +105,11 @@ bool MQTTPublisher::publish(const Config& cfg, const std::string& payload) {
 
 void MQTTPublisher::disconnect() {
     if (mosq) {
-        if (connected) mosquitto_disconnect(mosq.get());
+        if (connected) {
+            // Stop the background loop thread before disconnecting
+            mosquitto_loop_stop(mosq.get(), false);
+            mosquitto_disconnect(mosq.get());
+        }
         mosq.reset();
     }
     connected = false;

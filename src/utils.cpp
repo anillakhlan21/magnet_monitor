@@ -4,17 +4,6 @@
 #include <iomanip>
 #include <fstream>
 
-std::string get_remote_filename() {
-    std::time_t t = std::time(nullptr);
-    std::tm* now = std::localtime(&t);
-    std::ostringstream oss;
-    oss << "/CFDisk/mindata/day"
-        << std::setfill('0') << std::setw(2) << now->tm_mday
-        << std::setfill('0') << std::setw(2) << (now->tm_mon + 1)
-        << std::setfill('0') << std::setw(2) << (now->tm_year % 100)
-        << ".dat";
-    return oss.str();
-}
 
 void write_log(const std::string& log_file, const std::string& message) {
     if (log_file.empty()) return;
@@ -25,8 +14,9 @@ void write_log(const std::string& log_file, const std::string& message) {
     {
         std::ifstream ifs(log_file, std::ios::binary | std::ios::ate);
         if (ifs.is_open()) {
-            if (ifs.tellg() > MAX_LOG_SIZE) {
-                ifs.close();
+            long size = ifs.tellg();
+            ifs.close(); // Always close before any file operations
+            if (size > MAX_LOG_SIZE) {
                 std::remove(log_file.c_str());
             }
         }

@@ -7,6 +7,7 @@
 #include "ftp_downloader.h"
 #include "parser.h"
 #include "mqtt_publisher.h"
+#include "memory_monitor.h"
 
 struct CurlGlobalRAII {
     CurlGlobalRAII() { curl_global_init(CURL_GLOBAL_ALL); }
@@ -34,7 +35,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    write_log(cfg.log_file, "Application started. Mode: " + std::string(run_once ? "Single-run" : "Daemon"));
+    // Log system time to verify dayXXYYZZ.dat calculation
+    std::time_t boot_t = std::time(nullptr);
+    char boot_time_str[64];
+    std::strftime(boot_time_str, sizeof(boot_time_str), "%Y-%m-%d %H:%M:%S", std::localtime(&boot_t));
+    write_log(cfg.log_file, "Application started. Gateway System Time: " + std::string(boot_time_str));
+    write_log(cfg.log_file, "Note: If this time is wrong, your FTP filenames will be wrong (e.g. fetching day010170.dat).");
 
     // Login mechanism
     if (!cfg.app_username.empty() && !cfg.app_password.empty()) {
@@ -62,6 +68,12 @@ int main(int argc, char* argv[]) {
     
     MQTTPublisher mqtt;
     write_log(cfg.log_file,"MQTT Init");
+    
+    // Initialize memory leak detector
+    MemoryLeakDetector leak_detector;
+    write_log(cfg.log_file, "Memory leak detector initialized at " + 
+              MemoryMonitor::formatBytes(leak_detector.getBaselineMemory()));
+    
     // Connect MQTT if in daemon mode (for run_once, we connect on demand)
     if (!run_once) {
         if (!mqtt.connect(cfg)) {
@@ -74,39 +86,63 @@ int main(int argc, char* argv[]) {
 
     // Single run (useful for testing) -------------------------------------------------
     if (run_once) {
-        std::string remote_filename = get_remote_filename();
         std::string error;
+        std::string remote_filename = discover_latest_file(cfg, error);
+        
         bool success = false;
-        if (download_ftp(cfg, remote_filename, error)) {
-            std::string latest_row = get_latest_row(cfg.local_file);
-            success = mqtt.publish(cfg, latest_row);
-            write_log(cfg.log_file, "Single-run: FTP download and MQTT publish successful.");
+        if (!remote_filename.empty()) {
+            write_log(cfg.log_file, "Single-run: Found latest file " + remote_filename);
+            if (download_ftp(cfg, remote_filename, error)) {
+                std::string latest_row = get_latest_row(cfg.local_file);
+                success = mqtt.publish(cfg, latest_row);
+            } else {
+                std::cerr << "FTP download failed: " << error << std::endl;
+                write_log(cfg.log_file, "Single-run: FTP download failed: " + error);
+            }
         } else {
-            std::cerr << "FTP download failed: " << error << std::endl;
-            write_log(cfg.log_file, "Single-run: FTP download failed: " + error);
+            std::cerr << "File discovery failed: " << error << std::endl;
+            write_log(cfg.log_file, "Single-run: File discovery failed: " + error);
         }
         
         return success ? 0 : 1;
     }
 
     // Daemon mode: loop forever -------------------------------------------------------
+    int cycle_count = 0;
     while (true) {
         try {
-            std::string remote_filename = get_remote_filename();
-            std::string error;
-            write_log(cfg.log_file, "Cycle start: Checking FTP file " + remote_filename);
-            if (download_ftp(cfg, remote_filename, error)) {
-                std::string latest_row = get_latest_row(cfg.local_file);
-                if (mqtt.publish(cfg, latest_row)) {
-                    write_log(cfg.log_file, "Cycle success: Data published to MQTT.");
-                } else {
-                    write_log(cfg.log_file, "Cycle warning: MQTT publish failed.");
+            cycle_count++;
+            
+            // Check for memory leaks every 10 cycles
+            if (cycle_count % 10 == 0) {
+                bool leak_found = leak_detector.checkAndLog(cfg.log_file, "Cycle " + std::to_string(cycle_count));
+                if (leak_found) {
+                    std::cerr << "⚠️  Memory leak detected! Check log file for details." << std::endl;
                 }
-                sleep(cfg.poll_interval);
+            }
+            
+            std::string error;
+            std::string remote_filename = discover_latest_file(cfg, error);
+            
+            if (!remote_filename.empty()) {
+                write_log(cfg.log_file, "Cycle start: Latest file identified as " + remote_filename);
+                if (download_ftp(cfg, remote_filename, error)) {
+                    std::string latest_row = get_latest_row(cfg.local_file);
+                    if (mqtt.publish(cfg, latest_row)) {
+                        write_log(cfg.log_file, "Cycle success: Data published to MQTT.");
+                    } else {
+                        write_log(cfg.log_file, "Cycle warning: MQTT publish failed.");
+                    }
+                    sleep(cfg.poll_interval);
+                } else {
+                    std::cerr << "FTP download failed: " << error << std::endl;
+                    write_log(cfg.log_file, "Cycle error: FTP failed: " + error);
+                    std::cout << "Retrying FTP in " << cfg.retry_interval << " seconds..." << std::endl;
+                    sleep(cfg.retry_interval);
+                }
             } else {
-                std::cerr << "FTP download failed: " << error << std::endl;
-                write_log(cfg.log_file, "Cycle error: FTP failed: " + error);
-                std::cout << "Retrying FTP in " << cfg.retry_interval << " seconds..." << std::endl;
+                std::cerr << "File discovery failed: " << error << std::endl;
+                write_log(cfg.log_file, "Cycle error: Discovery failed: " + error);
                 sleep(cfg.retry_interval);
             }
         } catch (const std::exception& e) {
