@@ -133,8 +133,36 @@ std::string discover_latest_file(const Config& cfg, std::string& error_out) {
         return "";
     }
 
-    // Sort alphabetically so the last one is the latest
-    std::sort(day_files.begin(), day_files.end());
+    // Prefer numeric comparison of the index after "day" and before ".dat".
+    // This handles names like day1, day2, day10 correctly even when not zero-padded.
+    auto extract_index = [](const std::string& s) -> long long {
+        std::string lower = s;
+        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+        size_t pos = lower.find("day");
+        if (pos == std::string::npos) return -1;
+        pos += 3; // move past 'day'
+        size_t dot = lower.rfind(".dat");
+        if (dot == std::string::npos || dot <= pos) return -1;
+        std::string numpart = lower.substr(pos, dot - pos);
+        std::string digits;
+        for (char c : numpart) if (std::isdigit((unsigned char)c)) digits.push_back(c);
+        if (digits.empty()) return -1;
+        try { return std::stoll(digits); } catch (...) { return -1; }
+    };
+
+    std::sort(day_files.begin(), day_files.end(), [&](const std::string& a, const std::string& b) {
+        long long ia = extract_index(a);
+        long long ib = extract_index(b);
+        if (ia >= 0 && ib >= 0) return ia < ib; // numeric compare
+        if (ia >= 0) return true;              // numeric sorts before non-numeric
+        if (ib >= 0) return false;
+        // fallback: case-insensitive lexical
+        std::string la = a, lb = b;
+        std::transform(la.begin(), la.end(), la.begin(), ::tolower);
+        std::transform(lb.begin(), lb.end(), lb.begin(), ::tolower);
+        return la < lb;
+    });
+
     std::string latest = day_files.back();
     
     // Return full path if needed, or just filename. Python returns just filename and then appends it to path in RETR.
