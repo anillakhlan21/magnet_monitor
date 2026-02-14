@@ -29,6 +29,7 @@ add_executable(
   src/mqtt_publisher.cpp
     src/parser.cpp
     src/utils.cpp
+    src/memory_monitor.cpp
 )
 
 # include paths (add SDK includes)
