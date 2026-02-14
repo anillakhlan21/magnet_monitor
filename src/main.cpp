@@ -1,6 +1,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <curl/curl.h>
+#include <ctime>
 
 #include "config.h"
 #include "utils.h"
