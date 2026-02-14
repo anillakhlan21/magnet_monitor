@@ -3,6 +3,8 @@
 #include <curl/curl.h>
 #include <cstdio>
 #include <iostream>
+#include <memory>
+#include <cctype>
 
 #include <vector>
 #include <algorithm>
