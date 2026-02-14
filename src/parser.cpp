@@ -1,6 +1,7 @@
 #include "parser.h"
 #include <fstream>
 #include <string>
+#include <iostream>
 
 std::string get_latest_row(const std::string& local_file) {
     if (local_file.empty()) return "";
