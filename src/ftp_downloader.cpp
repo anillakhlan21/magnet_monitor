@@ -112,6 +112,9 @@ std::string discover_latest_file(const Config& cfg, std::string& error_out) {
         return "";
     }
 
+    // Log the raw directory listing for triage
+    write_log(cfg.log_file, std::string("FTP raw listing for /CFDisk/mindata/:\n") + file_list);
+
     std::vector<std::string> day_files;
     std::stringstream ss(file_list);
     std::string filename;
@@ -125,6 +128,13 @@ std::string discover_latest_file(const Config& cfg, std::string& error_out) {
         
         if (lower_f.find("day") == 0 && lower_f.size() >= 12 && lower_f.substr(lower_f.size() - 4) == ".dat") {
             day_files.push_back(filename);
+        }
+    }
+
+    // Log discovered candidates
+    if (!day_files.empty()) {
+        for (const auto& f : day_files) {
+            write_log(cfg.log_file, std::string("Found candidate file: ") + f);
         }
     }
 
@@ -164,6 +174,28 @@ std::string discover_latest_file(const Config& cfg, std::string& error_out) {
     });
 
     std::string latest = day_files.back();
+    // Log the sorted list with extracted numeric indices for debugging
+    auto extract_index_log = [&](const std::string& s) -> long long {
+        std::string lower = s;
+        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+        size_t pos = lower.find("day");
+        if (pos == std::string::npos) return -1;
+        pos += 3;
+        size_t dot = lower.rfind(".dat");
+        if (dot == std::string::npos || dot <= pos) return -1;
+        std::string numpart = lower.substr(pos, dot - pos);
+        std::string digits;
+        for (char c : numpart) if (std::isdigit((unsigned char)c)) digits.push_back(c);
+        if (digits.empty()) return -1;
+        try { return std::stoll(digits); } catch (...) { return -1; }
+    };
+
+    for (const auto& f : day_files) {
+        long long idx = extract_index_log(f);
+        write_log(cfg.log_file, std::string("Sorted candidate: ") + f + std::string("  index=") + (idx >= 0 ? std::to_string(idx) : std::string("(na)")));
+    }
+
+    write_log(cfg.log_file, std::string("Selected latest file: ") + latest);
     
     // Return full path if needed, or just filename. Python returns just filename and then appends it to path in RETR.
     // Our download_ftp expects the filename to be appended to cfg.ftp_host.
