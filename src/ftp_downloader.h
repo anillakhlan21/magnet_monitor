@@ -7,5 +7,6 @@
 // Returns true on success, false on failure. On failure an optional message can be set in error_out.
 bool download_ftp(const Config& cfg, const std::string& remote_filename, std::string& error_out);
 
-// Find the latest dayXXXXXX.dat file in the /CFDisk/mindata directory
+// Find the correct dayDDMMYY.dat file using FTP server time (not local time)
+// This ensures correct file selection even when device time is wrong
 std::string discover_latest_file(const Config& cfg, std::string& error_out);

@@ -2,9 +2,10 @@
 #include <mosquitto.h>
 #include <iostream>
 #include <algorithm>
+#include <unistd.h>
 #include "utils.h"
 
-MQTTPublisher::MQTTPublisher() : connected(false) {
+MQTTPublisher::MQTTPublisher() : connected(false), last_mid(0), message_delivered(false) {
     mosquitto_lib_init();
 }
 
@@ -15,6 +16,14 @@ MQTTPublisher::~MQTTPublisher() {
 
 void MQTTPublisher::MosqDeleter::operator()(struct mosquitto* m) const {
     if (m) mosquitto_destroy(m);
+}
+
+// Callback when message is published successfully
+void MQTTPublisher::on_publish_callback(struct mosquitto* mosq, void* userdata, int mid) {
+    MQTTPublisher* publisher = static_cast<MQTTPublisher*>(userdata);
+    if (publisher && mid == publisher->last_mid) {
+        publisher->message_delivered = true;
+    }
 }
 
 bool MQTTPublisher::connect(const Config& cfg) {
@@ -39,12 +48,15 @@ bool MQTTPublisher::connect(const Config& cfg) {
             }
         }
 
-        mosq.reset(mosquitto_new(cfg.mqtt_client_id.empty() ? nullptr : cfg.mqtt_client_id.c_str(), true, nullptr));
+        mosq.reset(mosquitto_new(cfg.mqtt_client_id.empty() ? nullptr : cfg.mqtt_client_id.c_str(), true, this));
         if (!mosq) {
             std::cerr << "Failed to create mosquitto instance" << std::endl;
             write_log(cfg.log_file, "Failed to create mosquitto instance");
             return false;
         }
+
+        // Set callback for publish confirmation
+        mosquitto_publish_callback_set(mosq.get(), on_publish_callback);
 
         if (!cfg.mqtt_user.empty()) {
             mosquitto_username_pw_set(mosq.get(), cfg.mqtt_user.c_str(), cfg.mqtt_pass.c_str());
@@ -86,7 +98,11 @@ bool MQTTPublisher::publish(const Config& cfg, const std::string& payload) {
         if (!connect(cfg)) return false;
     }
 
-    int rc = mosquitto_publish(mosq.get(), nullptr, cfg.mqtt_topic.c_str(), static_cast<int>(payload.size()), payload.data(), 1, false);
+    // Reset delivery flag
+    message_delivered = false;
+    int mid = 0;
+
+    int rc = mosquitto_publish(mosq.get(), &mid, cfg.mqtt_topic.c_str(), static_cast<int>(payload.size()), payload.data(), 1, false);
     if (rc != MOSQ_ERR_SUCCESS) {
         std::string err_msg = "MQTT publish failed: " + std::string(mosquitto_strerror(rc));
         std::cerr << err_msg << std::endl;
@@ -98,9 +114,28 @@ bool MQTTPublisher::publish(const Config& cfg, const std::string& payload) {
         return false;
     }
 
-    std::cout << "Data sent to MQTT successfully." << std::endl;
-    write_log(cfg.log_file, "Data sent to MQTT successfully");
-    return true;
+    // Store message ID for callback verification
+    last_mid = mid;
+    
+    // Wait for message to be delivered (max 5 seconds)
+    int wait_count = 0;
+    const int max_wait = 50; // 50 * 100ms = 5 seconds
+    while (!message_delivered && wait_count < max_wait) {
+        usleep(100000); // 100ms
+        wait_count++;
+    }
+    
+    if (message_delivered) {
+        std::cout << "Data sent to MQTT successfully (confirmed delivery)." << std::endl;
+        write_log(cfg.log_file, "Data sent to MQTT successfully (confirmed delivery)");
+        return true;
+    } else {
+        std::string warn_msg = "MQTT publish queued but delivery not confirmed within 5 seconds (mid=" + std::to_string(mid) + ")";
+        std::cerr << "WARNING: " << warn_msg << std::endl;
+        write_log(cfg.log_file, "WARNING: " + warn_msg);
+        // Still return true since publish was queued successfully
+        return true;
+    }
 }
 
 void MQTTPublisher::disconnect() {

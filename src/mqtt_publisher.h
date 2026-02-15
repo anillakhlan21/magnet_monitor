@@ -3,6 +3,7 @@
 
 #include <string>
 #include <memory>
+#include <atomic>
 #include "config.h"
 
 struct mosquitto;
@@ -22,6 +23,13 @@ private:
     };
     std::unique_ptr<struct mosquitto, MosqDeleter> mosq;
     bool connected;
+    
+    // Message delivery tracking
+    std::atomic<int> last_mid;
+    std::atomic<bool> message_delivered;
+    
+    // Mosquitto callbacks
+    static void on_publish_callback(struct mosquitto* mosq, void* userdata, int mid);
 };
 
 #endif

@@ -36,12 +36,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Log system time to verify dayXXYYZZ.dat calculation
-    std::time_t boot_t = std::time(nullptr);
-    char boot_time_str[64];
-    std::strftime(boot_time_str, sizeof(boot_time_str), "%Y-%m-%d %H:%M:%S", std::localtime(&boot_t));
-    write_log(cfg.log_file, "Application started. Gateway System Time: " + std::string(boot_time_str));
-    write_log(cfg.log_file, "Note: If this time is wrong, your FTP filenames will be wrong (e.g. fetching day010170.dat).");
+    write_log(cfg.log_file, "Application started");
+    write_log(cfg.log_file, "Using FTP server time for file discovery (local device time is not used)");
 
     // Login mechanism
     if (!cfg.app_username.empty() && !cfg.app_password.empty()) {
@@ -109,7 +105,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Daemon mode: loop forever -------------------------------------------------------
-    int cycle_count = 0;
+    unsigned long long cycle_count = 0;
     while (true) {
         try {
             cycle_count++;
