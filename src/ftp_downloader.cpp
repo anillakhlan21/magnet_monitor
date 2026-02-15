@@ -143,29 +143,46 @@ std::string discover_latest_file(const Config& cfg, std::string& error_out) {
         return "";
     }
 
-    // Prefer numeric comparison of the index after "day" and before ".dat".
-    // This handles names like day1, day2, day10 correctly even when not zero-padded.
-    auto extract_index = [](const std::string& s) -> long long {
+    // Prefer date-aware comparison. Filenames are expected to contain a date
+    // like dayDDMMYY.dat or dayDDMMYYYY.dat. Parse day, month, year and compare
+    // by (year, month, day) so 15 Feb 2026 (150226) > 31 Jan 2026 (310126).
+    auto parse_date = [](const std::string& s) -> std::tuple<int,int,int> {
         std::string lower = s;
         std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
         size_t pos = lower.find("day");
-        if (pos == std::string::npos) return -1;
-        pos += 3; // move past 'day'
+        if (pos == std::string::npos) return std::tuple<int,int,int>{-1,-1,-1};
+        pos += 3;
         size_t dot = lower.rfind(".dat");
-        if (dot == std::string::npos || dot <= pos) return -1;
+        if (dot == std::string::npos || dot <= pos) return std::tuple<int,int,int>{-1,-1,-1};
         std::string numpart = lower.substr(pos, dot - pos);
         std::string digits;
         for (char c : numpart) if (std::isdigit((unsigned char)c)) digits.push_back(c);
-        if (digits.empty()) return -1;
-        try { return std::stoll(digits); } catch (...) { return -1; }
+        if (digits.size() == 6) {
+            // DDMMYY
+            int dd = std::stoi(digits.substr(0,2));
+            int mm = std::stoi(digits.substr(2,2));
+            int yy = std::stoi(digits.substr(4,2));
+            int year = 2000 + yy; // assume 2000s
+            return std::tuple<int,int,int>{year, mm, dd};
+        } else if (digits.size() == 8) {
+            // DDMMYYYY
+            int dd = std::stoi(digits.substr(0,2));
+            int mm = std::stoi(digits.substr(2,2));
+            int year = std::stoi(digits.substr(4,4));
+            return std::tuple<int,int,int>{year, mm, dd};
+        }
+        return std::tuple<int,int,int>{-1,-1,-1};
     };
 
     std::sort(day_files.begin(), day_files.end(), [&](const std::string& a, const std::string& b) {
-        long long ia = extract_index(a);
-        long long ib = extract_index(b);
-        if (ia >= 0 && ib >= 0) return ia < ib; // numeric compare
-        if (ia >= 0) return true;              // numeric sorts before non-numeric
-        if (ib >= 0) return false;
+        auto da = parse_date(a);
+        auto db = parse_date(b);
+        if (std::get<0>(da) >= 0 && std::get<0>(db) >= 0) {
+            if (da != db) return da < db; // tuple comparison on (year,month,day)
+            return a < b;
+        }
+        if (std::get<0>(da) >= 0) return true;  // valid date sorts before invalid
+        if (std::get<0>(db) >= 0) return false;
         // fallback: case-insensitive lexical
         std::string la = a, lb = b;
         std::transform(la.begin(), la.end(), la.begin(), ::tolower);
@@ -174,25 +191,16 @@ std::string discover_latest_file(const Config& cfg, std::string& error_out) {
     });
 
     std::string latest = day_files.back();
-    // Log the sorted list with extracted numeric indices for debugging
-    auto extract_index_log = [&](const std::string& s) -> long long {
-        std::string lower = s;
-        std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-        size_t pos = lower.find("day");
-        if (pos == std::string::npos) return -1;
-        pos += 3;
-        size_t dot = lower.rfind(".dat");
-        if (dot == std::string::npos || dot <= pos) return -1;
-        std::string numpart = lower.substr(pos, dot - pos);
-        std::string digits;
-        for (char c : numpart) if (std::isdigit((unsigned char)c)) digits.push_back(c);
-        if (digits.empty()) return -1;
-        try { return std::stoll(digits); } catch (...) { return -1; }
-    };
 
+    // Log the sorted list with parsed dates for debugging
     for (const auto& f : day_files) {
-        long long idx = extract_index_log(f);
-        write_log(cfg.log_file, std::string("Sorted candidate: ") + f + std::string("  index=") + (idx >= 0 ? std::to_string(idx) : std::string("(na)")));
+        auto d = parse_date(f);
+        if (std::get<0>(d) >= 0) {
+            write_log(cfg.log_file, std::string("Sorted candidate: ") + f + std::string("  date=") +
+                      std::to_string(std::get<0>(d)) + "-" + std::to_string(std::get<1>(d)) + "-" + std::to_string(std::get<2>(d)));
+        } else {
+            write_log(cfg.log_file, std::string("Sorted candidate: ") + f + std::string("  date=(na)"));
+        }
     }
 
     write_log(cfg.log_file, std::string("Selected latest file: ") + latest);
